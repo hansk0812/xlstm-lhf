@@ -24,6 +24,7 @@ class sLSTMLayerConfig(sLSTMCellConfig):
     conv1d_kernel_size: int = 4  # 0 means no convolution included
     group_norm_weight: bool = True
     dropout: float = 0.0
+    strided_conv: bool = False
 
     def __post_init__(self):
         self.hidden_size = self.embedding_dim
@@ -42,6 +43,9 @@ class sLSTMLayer(nn.Module):
                 config=CausalConv1dConfig(
                     feature_dim=self.config.embedding_dim,
                     kernel_size=self.config.conv1d_kernel_size,
+                     conv1d_kwargs = {
+                        "stride": self.config.conv1d_kernel_size \
+                                if self.config.strided_conv else 1}
                 )
             )
             self.conv_act_fn = nn.SiLU()
@@ -75,7 +79,12 @@ class sLSTMLayer(nn.Module):
             )
         )
 
+        if self.config.strided_conv:
+            self.config.embedding_dim = self.config.embedding_dim // self.config.conv1d_kernel_size
         self.slstm_cell = sLSTMCell(self.config)
+        if self.config.strided_conv:
+            self.config.embedding_dim = self.config.embedding_dim * self.config.conv1d_kernel_size
+        
         self.group_norm = MultiHeadLayerNorm(
             ndim=self.config.embedding_dim, weight=self.config.group_norm_weight
         )
@@ -153,8 +162,11 @@ class sLSTMLayer(nn.Module):
         )
 
         y = self.dropout(y)
-
-        out = self.group_norm(y).transpose(1, 2).view(B, S, -1)
+        
+        if self.config.strided_conv:
+            out = self.group_norm(y).transpose(1, 2).view(B, S//self.config.conv1d_kernel_size, -1)
+        else:
+            out = self.group_norm(y).transpose(1, 2).view(B, S, -1)
 
         if return_last_state:
             return out, {"conv_state": conv_state, "slstm_state": slstm_state}

@@ -28,6 +28,8 @@ class mLSTMLayerConfig(UpProjConfigMixin):
     dropout: float = 0.0
     context_length: int = -1
 
+    strided_conv: bool = False
+
     _num_blocks: int = 1
     _inner_embedding_dim: int = None
 
@@ -76,6 +78,7 @@ class mLSTMLayer(nn.Module):
             config=CausalConv1dConfig(
                 feature_dim=self.config._inner_embedding_dim,
                 kernel_size=self.config.conv1d_kernel_size,
+                conv1d_kwargs = {"stride": self.config.conv1d_kernel_size}
             )
         )
         self.conv_act_fn = nn.SiLU()
@@ -108,6 +111,8 @@ class mLSTMLayer(nn.Module):
         # mlstm branch
         x_mlstm_conv = self.conv1d(x_mlstm)
         x_mlstm_conv_act = self.conv_act_fn(x_mlstm_conv)
+        if self.config.strided_conv:
+            x_mlstm_conv_act = x_mlstm_conv_act.repeat((1,self.config.conv1d_kernel_size,1))
 
         q = self.q_proj(x_mlstm_conv_act)
         k = self.k_proj(x_mlstm_conv_act)

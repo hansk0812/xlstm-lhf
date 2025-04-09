@@ -59,8 +59,10 @@ class xLSTMBlock(nn.Module):
 
         if self.config.mlstm is not None:
             self.xlstm = mLSTMLayer(config=self.config.mlstm)
+            self.is_mlstm = True
         elif self.config.slstm is not None:
             self.xlstm = sLSTMLayer(config=self.config.slstm)
+            self.is_mlstm = False
         else:
             raise ValueError("Either mlstm or slstm must be provided")
 
@@ -74,7 +76,11 @@ class xLSTMBlock(nn.Module):
         self.reset_parameters()
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
-        x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
+        if self.is_mlstm:
+            x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
+        else:
+            x = x + self.xlstm(self.xlstm_norm(x), **kwargs).repeat((1,self.config.slstm.conv1d_kernel_size,1))
+       x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
         if self.ffn is not None:
             x = x + self.ffn(self.ffn_norm(x), **kwargs)
         return x
