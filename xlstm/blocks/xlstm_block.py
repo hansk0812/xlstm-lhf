@@ -80,7 +80,7 @@ class xLSTMBlock(nn.Module):
             x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
         else:
             x = x + self.xlstm(self.xlstm_norm(x), **kwargs).repeat((1,self.config.slstm.conv1d_kernel_size,1))
-       x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
+        x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
         if self.ffn is not None:
             x = x + self.ffn(self.ffn_norm(x), **kwargs)
         return x
