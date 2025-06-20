@@ -28,6 +28,7 @@ class mLSTMLayerConfig(UpProjConfigMixin):
     dropout: float = 0.0
     context_length: int = -1
 
+    channel_mixing: bool = False
     strided_conv: bool = False
 
     _num_blocks: int = 1
@@ -78,6 +79,7 @@ class mLSTMLayer(nn.Module):
             config=CausalConv1dConfig(
                 feature_dim=self.config._inner_embedding_dim,
                 kernel_size=self.config.conv1d_kernel_size,
+                channel_mixing=self.config.channel_mixing,
                 conv1d_kwargs = {"stride": self.config.conv1d_kernel_size}
             )
         )

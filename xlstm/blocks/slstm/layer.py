@@ -24,7 +24,9 @@ class sLSTMLayerConfig(sLSTMCellConfig):
     conv1d_kernel_size: int = 4  # 0 means no convolution included
     group_norm_weight: bool = True
     dropout: float = 0.0
+
     strided_conv: bool = False
+    channel_mixing: bool = False
 
     def __post_init__(self):
         self.hidden_size = self.embedding_dim
@@ -43,6 +45,7 @@ class sLSTMLayer(nn.Module):
                 config=CausalConv1dConfig(
                     feature_dim=self.config.embedding_dim,
                     kernel_size=self.config.conv1d_kernel_size,
+                    channel_mixing=self.config.channel_mixing,
                      conv1d_kwargs = {
                         "stride": self.config.conv1d_kernel_size \
                                 if self.config.strided_conv else 1}

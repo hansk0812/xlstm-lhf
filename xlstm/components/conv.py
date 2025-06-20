@@ -79,7 +79,7 @@ class CausalConv1d(nn.Module):
         else:
             self.pad = (
                 self.config.kernel_size - 1
-            )  # padding of this size assures temporal causality.
+                ) # padding of this size assures temporal causality; padding for strided conv ignored for now.
             self.conv = nn.Conv1d(
                 in_channels=self.config.feature_dim,
                 out_channels=self.config.feature_dim,
@@ -91,6 +91,8 @@ class CausalConv1d(nn.Module):
             )
         # B, C, L
         self.reset_parameters()
+        
+        self.strided = "stride" in self.config.conv1d_kwargs and self.config.conv1d_kwargs["stride"] > 1
 
     def reset_parameters(self, **kwargs):
         self.conv.reset_parameters()
@@ -122,7 +124,13 @@ class CausalConv1d(nn.Module):
         y = self.conv(y)  # (B,F,T+pad) tensor
         if conv_state is not None:
             y = y[:, :, conv_state.shape[1] :]
-
+        
+        if self.strided:
+            factor = x.shape[-2] // self.config.conv1d_kwargs["stride"] - 1
+            repeat = x.shape[-2] // (factor + 2) + 1
+            y = y.repeat((1,1,repeat))
+            self.pad = factor + 2 - x.shape[-2] % (factor + 2)
+        
         if return_last_state:
             return y[:, :, : -self.pad].transpose(2, 1), x[:, -self.pad :]
         else:
