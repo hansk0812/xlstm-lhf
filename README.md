@@ -8,7 +8,7 @@
 
 ## Long Horizon Forecasting for Time Series
 
-When using 1D time series, adding `stride`s to the CausalConv1D layers and `channel_mixing` helps improve performance by around 14%. For multivariate time series forecasting, CausalConv1D with strides expects the series to have spatial coherence and so degrades performance.
+When using 1D time series, adding `stride`s to the CausalConv1D layers and `channel_mixing` helps improve performance by around 14%. 
 
 ## About
 
