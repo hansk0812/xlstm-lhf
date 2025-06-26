@@ -42,7 +42,7 @@ class mLSTMCell(nn.Module):
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, **kwargs) -> torch.Tensor:
         B, S, _ = q.shape  # (B, S, H)
-
+        
         if_gate_input = torch.cat([q, k, v], dim=-1)
         q = q.view(B, S, self.config.num_heads, -1)  # (B, S, NH, DH)
         k = k.view(B, S, self.config.num_heads, -1)  # (B, S, NH, DH)

@@ -29,12 +29,13 @@ class mLSTMLayerConfig(UpProjConfigMixin):
     context_length: int = -1
 
     channel_mixing: bool = False
-    strided_conv: bool = False
+    strided_conv: int = 0 # [0: no strides, 1: strided conv, 2: strided mLSTM]
 
     _num_blocks: int = 1
     _inner_embedding_dim: int = None
 
     def __post_init__(self):
+        self.round_proj_up_to_multiple_of = self.num_heads * 8
         self._set_proj_up_dim(embedding_dim=self.embedding_dim)
         self._inner_embedding_dim = self._proj_up_dim
 
@@ -80,7 +81,10 @@ class mLSTMLayer(nn.Module):
                 feature_dim=self.config._inner_embedding_dim,
                 kernel_size=self.config.conv1d_kernel_size,
                 channel_mixing=self.config.channel_mixing,
-                conv1d_kwargs = {"stride": self.config.conv1d_kernel_size}
+                strided_conv=self.config.strided_conv,
+                conv1d_kwargs = {
+                    "stride": self.config.conv1d_kernel_size if self.config.strided_conv > 0 else 1
+                    }
             )
         )
         self.conv_act_fn = nn.SiLU()
@@ -105,17 +109,17 @@ class mLSTMLayer(nn.Module):
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         B, S, _ = x.shape
-
+           
         # up-projection
         x_inner = self.proj_up(x)
         x_mlstm, z = torch.split(x_inner, split_size_or_sections=self.config._inner_embedding_dim, dim=-1)
-
+        
         # mlstm branch
         x_mlstm_conv = self.conv1d(x_mlstm)
         x_mlstm_conv_act = self.conv_act_fn(x_mlstm_conv)
-        if self.config.strided_conv:
-            x_mlstm_conv_act = x_mlstm_conv_act.repeat((1,self.config.conv1d_kernel_size,1))
-
+        #if self.config.strided_conv:
+        #    x_mlstm_conv_act = x_mlstm_conv_act.repeat((1,self.config.conv1d_kernel_size,1))
+        
         q = self.q_proj(x_mlstm_conv_act)
         k = self.k_proj(x_mlstm_conv_act)
         v = self.v_proj(x_mlstm)

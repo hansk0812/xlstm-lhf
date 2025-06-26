@@ -25,7 +25,7 @@ class sLSTMLayerConfig(sLSTMCellConfig):
     group_norm_weight: bool = True
     dropout: float = 0.0
 
-    strided_conv: bool = False
+    strided_conv: int = 0 # [0: no strides, 1: strided self-contained conv repeats, 2: sLSTM-wide stride]
     channel_mixing: bool = False
 
     def __post_init__(self):
@@ -46,12 +46,17 @@ class sLSTMLayer(nn.Module):
                     feature_dim=self.config.embedding_dim,
                     kernel_size=self.config.conv1d_kernel_size,
                     channel_mixing=self.config.channel_mixing,
-                     conv1d_kwargs = {
-                        "stride": self.config.conv1d_kernel_size \
-                                if self.config.strided_conv else 1}
+                    strided_conv=self.config.strided_conv,
+                    conv1d_kwargs={
+                        "stride": self.config.conv1d_kernel_size if self.config.strided_conv > 0 else 1
+                        }
                 )
             )
             self.conv_act_fn = nn.SiLU()
+        
+        #if self.config.strided_conv == 2:
+        #    self.config.embedding_dim = self.config.embedding_dim // self.config.conv1d_kernel_size + 1
+        #    self.config.hidden_size = self.config.hidden_size // self.config.conv1d_kernel_size + 1
 
         self.fgate = LinearHeadwiseExpand(
             config=LinearHeadwiseExpandConfig(
@@ -82,16 +87,15 @@ class sLSTMLayer(nn.Module):
             )
         )
 
-        if self.config.strided_conv:
-            self.config.embedding_dim = self.config.embedding_dim // self.config.conv1d_kernel_size
         self.slstm_cell = sLSTMCell(self.config)
-        if self.config.strided_conv:
-            self.config.embedding_dim = self.config.embedding_dim * self.config.conv1d_kernel_size
         
         self.group_norm = MultiHeadLayerNorm(
             ndim=self.config.embedding_dim, weight=self.config.group_norm_weight
         )
         self.dropout = nn.Dropout(self.config.dropout)
+        
+        if self.config.strided_conv == 2:
+            self.stride_pooling = nn.AvgPool1d(self.config.conv1d_kernel_size)
 
     def reset_parameters(self):
         self.slstm_cell.reset_parameters()
@@ -114,7 +118,7 @@ class sLSTMLayer(nn.Module):
             x_conv = self.conv_act_fn(x_conv)
         else:
             x_conv = x
-
+        
         i, f, z, o = (
             self.fgate(x_conv),
             self.igate(x_conv),
@@ -141,7 +145,7 @@ class sLSTMLayer(nn.Module):
         **kwargs,
     ) -> torch.Tensor:
         B, S, _ = x.shape
-
+           
         if self.config.conv1d_kernel_size > 0:
             if return_last_state:
                 x_conv, conv_state = self.conv1d(
@@ -150,27 +154,29 @@ class sLSTMLayer(nn.Module):
             else:
                 x_conv = self.conv1d(x, conv_state, return_last_state=return_last_state)
             x_conv = self.conv_act_fn(x_conv)
+            if self.config.strided_conv == 2:
+                x = self.stride_pooling(x.transpose(2,1)).transpose(2,1)
         else:
             x_conv = x
-
+           
         i, f, z, o = (
             self.fgate(x_conv),
             self.igate(x_conv),
             self.zgate(x),
             self.ogate(x),
         )
-
+        
         y, slstm_state = self.slstm_cell(
             torch.cat([i, f, z, o], dim=-1), state=slstm_state
         )
 
         y = self.dropout(y)
         
-        if self.config.strided_conv:
-            out = self.group_norm(y).transpose(1, 2).view(B, S//self.config.conv1d_kernel_size, -1)
+        if self.config.strided_conv == 2:
+            out = self.group_norm(y).transpose(1, 2).view(B, S//self.config.conv1d_kernel_size, -1).repeat((1, self.config.conv1d_kernel_size, 1))
         else:
             out = self.group_norm(y).transpose(1, 2).view(B, S, -1)
-
+        
         if return_last_state:
             return out, {"conv_state": conv_state, "slstm_state": slstm_state}
         else:

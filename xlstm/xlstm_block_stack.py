@@ -19,7 +19,7 @@ class xLSTMBlockStackConfig:
 
     context_length: int = -1
     num_blocks: int = 1
-    embedding_dim: int = 128
+    embedding_dim: int = 144
     add_post_blocks_norm: bool = True
     bias: bool = False
     dropout: float = 0.0

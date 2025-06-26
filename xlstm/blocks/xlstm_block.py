@@ -51,10 +51,8 @@ class xLSTMBlock(nn.Module):
     def __init__(self, config: xLSTMBlockConfig) -> None:
         super().__init__()
         self.config = config
-        embedding_dim = (
-            self.config.mlstm.embedding_dim if self.config.mlstm is not None else self.config.slstm.embedding_dim
-        )
-
+        embedding_dim = self.config.mlstm.embedding_dim if self.config.mlstm is not None else self.config.slstm.embedding_dim
+        
         self.xlstm_norm = LayerNorm(ndim=embedding_dim, weight=True, bias=False)
 
         if self.config.mlstm is not None:
@@ -77,6 +75,7 @@ class xLSTMBlock(nn.Module):
         x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
         if self.ffn is not None:
             x = x + self.ffn(self.ffn_norm(x), **kwargs)
+        x = x + self.xlstm(self.xlstm_norm(x), **kwargs)
         return x
 
     def step(self, x: torch.Tensor, **kwargs) -> tuple[torch.Tensor, dict[str, tuple[torch.Tensor, ...]]]:
